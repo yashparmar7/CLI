@@ -169,11 +169,11 @@ if (answers.frontend) {
 if (answers.frontend && answers.tailwind) {
   const frontendDir = path.join(root, "frontend");
 
-  // 1. tailwind.config.js
+  // 1. tailwind.config.cjs
   fs.writeFileSync(
-    path.join(frontendDir, "tailwind.config.js"),
+    path.join(frontendDir, "tailwind.config.cjs"),
     `/** @type {import('tailwindcss').Config} */
-export default {
+module.exports = {
   content: ["./index.html", "./src/**/*.{js,jsx}"],
   theme: {
     extend: {},
@@ -183,12 +183,12 @@ export default {
 `,
   );
 
-  // 2. postcss.config.js (Tailwind v4 FIX)
+  // 2. postcss.config.cjs
   fs.writeFileSync(
-    path.join(frontendDir, "postcss.config.js"),
-    `export default {
+    path.join(frontendDir, "postcss.config.cjs"),
+    `module.exports = {
   plugins: {
-    "@tailwindcss/postcss": {},
+    tailwindcss: {},
     autoprefixer: {},
   },
 };
@@ -216,60 +216,78 @@ export default {
 
 spinner.succeed("Project structure created");
 
-/* -------------------- DEP INSTALLER -------------------- */
-const installDeps = (dir, deps, dev = false) => {
-  if (!deps.length) return;
-  execSync(`npm install ${dev ? "--save-dev" : ""} ${deps.join(" ")}`, {
-    cwd: dir,
-    stdio: "inherit",
-  });
+/* -------------------- DEP MANAGEMENT -------------------- */
+const updatePackageJson = (dir, deps = {}, devDeps = {}, removeDeps = []) => {
+  const pkgPath = path.join(dir, "package.json");
+  const pkg = fs.readJsonSync(pkgPath);
+
+  if (pkg.dependencies) {
+    pkg.dependencies = { ...pkg.dependencies, ...deps };
+    removeDeps.forEach((d) => delete pkg.dependencies[d]);
+  } else {
+    pkg.dependencies = deps;
+  }
+
+  if (pkg.devDependencies) {
+    pkg.devDependencies = { ...pkg.devDependencies, ...devDeps };
+    removeDeps.forEach((d) => delete pkg.devDependencies[d]);
+  } else {
+    pkg.devDependencies = devDeps;
+  }
+
+  fs.writeJsonSync(pkgPath, pkg, { spaces: 2 });
+};
+
+const installDeps = (dir) => {
+  console.log(chalk.cyan(`\n📦 Installing dependencies in ${path.basename(dir)}...`));
+  execSync("npm install", { cwd: dir, stdio: "inherit" });
 };
 
 /* -------------------- BACKEND DEPS -------------------- */
 if (answers.backend) {
-  const deps = ["express", "express-async-handler", "express-validator"];
-  const devDeps = ["nodemon"];
+  const removeDeps = [];
+  if (!answers.mongo) removeDeps.push("mongoose");
+  if (!answers.cors) removeDeps.push("cors");
+  if (!answers.dotenv) removeDeps.push("dotenv");
+  if (!answers.jwt) removeDeps.push("jsonwebtoken");
+  if (!answers.bcrypt) removeDeps.push("bcryptjs");
+  if (!answers.morgan) removeDeps.push("morgan");
+  if (!answers.helmet) removeDeps.push("helmet");
 
-  answers.mongo && deps.push("mongoose");
-  answers.cors && deps.push("cors");
-  answers.dotenv && deps.push("dotenv");
-  answers.jwt && deps.push("jsonwebtoken");
-  answers.bcrypt && deps.push("bcryptjs");
-  answers.morgan && deps.push("morgan");
-  answers.helmet && deps.push("helmet");
-
-  installDeps(path.join(root, "backend"), deps);
-  installDeps(path.join(root, "backend"), devDeps, true);
+  updatePackageJson(path.join(root, "backend"), {}, {}, removeDeps);
+  installDeps(path.join(root, "backend"));
 }
 
 /* -------------------- FRONTEND DEPS -------------------- */
 if (answers.frontend) {
-  const deps = ["react", "react-dom"];
-  const devDeps = [];
+  const deps = {};
+  const devDeps = {};
 
-  answers.router && deps.push("react-router-dom");
-  answers.axios && deps.push("axios");
+  if (answers.router) deps["react-router-dom"] = "^6.20.0";
+  if (answers.axios) deps["axios"] = "^1.6.0";
 
   if (answers.tailwind) {
-    devDeps.push(
-      "tailwindcss",
-      "@tailwindcss/postcss",
-      "postcss",
-      "autoprefixer",
-    );
+    devDeps["tailwindcss"] = "^3.3.5";
+    devDeps["postcss"] = "^8.4.31";
+    devDeps["autoprefixer"] = "^10.4.16";
   }
 
   if (answers.lint) {
-    devDeps.push(
-      "eslint",
-      "prettier",
-      "eslint-plugin-react",
-      "eslint-plugin-react-hooks",
+    devDeps["eslint"] = "^8.53.0";
+    devDeps["eslint-plugin-react"] = "^7.33.2";
+    devDeps["eslint-plugin-react-hooks"] = "^4.6.0";
+    devDeps["eslint-plugin-react-refresh"] = "^0.4.4";
+    devDeps["prettier"] = "^3.1.0";
+
+    // Create eslint config
+    fs.writeFileSync(
+      path.join(root, "frontend", ".eslintrc.cjs"),
+      `module.exports = { root: true, env: { browser: true, es2020: true }, extends: [ 'eslint:recommended', 'plugin:react/recommended', 'plugin:react/jsx-runtime', 'plugin:react-hooks/recommended', ], ignorePatterns: ['dist', '.eslintrc.cjs'], parserOptions: { ecmaVersion: 'latest', sourceType: 'module' }, settings: { react: { version: '18.2' } }, plugins: ['react-refresh'], rules: { 'react-refresh/only-export-components': [ 'warn', { allowConstantExport: true }, ], }, };`
     );
   }
 
-  installDeps(path.join(root, "frontend"), deps);
-  installDeps(path.join(root, "frontend"), devDeps, true);
+  updatePackageJson(path.join(root, "frontend"), deps, devDeps);
+  installDeps(path.join(root, "frontend"));
 }
 
 /* -------------------- DONE -------------------- */
