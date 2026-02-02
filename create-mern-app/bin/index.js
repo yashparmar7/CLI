@@ -8,18 +8,16 @@ import ora from "ora";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
 
-/* -------------------- ESM __dirname FIX -------------------- */
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-/* ----------------------------------------------------------- */
 
-console.log(chalk.green("🔥 MY CLI IS RUNNING"));
+
 
 const cwd = process.cwd();
 
 console.log(chalk.cyan.bold("\n Create MERN Stack App\n"));
 
-/* -------------------- PROMPTS -------------------- */
+// PROMPTS
 const answers = await inquirer.prompt([
   { name: "projectName", message: "Project name?", default: "mern-stack-app" },
 
@@ -105,49 +103,69 @@ const answers = await inquirer.prompt([
   },
 ]);
 
-/* -------------------- PROJECT ROOT -------------------- */
+// PROJECT ROOT 
 const root = path.join(cwd, answers.projectName);
 fs.mkdirSync(root, { recursive: true });
 
 const spinner = ora("Scaffolding project...").start();
 
-/* -------------------- TEMPLATE PATHS -------------------- */
+// TEMPLATE PATHS  
 const backendTemplatePath = path.join(__dirname, "../templates/backend");
 const frontendTemplatePath = path.join(__dirname, "../templates/frontend");
 
-/* -------------------- BACKEND SETUP -------------------- */
+// BACKEND SETUP  
 if (answers.backend) {
   fs.copySync(backendTemplatePath, path.join(root, "backend"));
 
   const appJsPath = path.join(root, "backend", "src", "app.js");
-  let appJsContent = fs.readFileSync(appJsPath, "utf-8");
+  const appJsContent = fs.readFileSync(appJsPath, "utf-8");
 
-  if (!answers.cors) {
-    appJsContent = appJsContent.replace(/import cors.*\n/, "");
-    appJsContent = appJsContent.replace(/app\.use\(cors\(\)\);\n/, "");
-  }
+  // Feature flags based on user answers
+  const features = {
+    cors: answers.cors,
+    helmet: answers.helmet,
+    morgan: answers.morgan,
+    jwt: answers.jwt,
+    mongo: answers.mongo,
+  };
 
-  if (!answers.helmet) {
-    appJsContent = appJsContent.replace(/import helmet.*\n/, "");
-    appJsContent = appJsContent.replace(/app\.use\(helmet\(\)\);\n/, "");
-  }
+  /**
+   * Process conditional markers in file content
+   * @param {string} content
+   * @param {Object} features
+   */
+  const processTemplate = (content, features) => {
+    const lines = content.split("\n");
+    const result = [];
+    const stack = []; // Keep track of nested blocks if we ever support them (simple boolean for now)
 
-  if (!answers.morgan) {
-    appJsContent = appJsContent.replace(/import morgan.*\n/, "");
-    appJsContent = appJsContent.replace(/app\.use\(morgan.*\);\n/, "");
-  }
+    for (const line of lines) {
+      const trimLine = line.trim();
 
-  if (!answers.jwt) {
-    appJsContent = appJsContent.replace(/import authRoutes.*\n/, "");
-    appJsContent = appJsContent.replace(/app\.use\("\/api\/auth".*\);\n/, "");
-  }
+      // Check for IF marker
+      if (trimLine.startsWith("// #IF")) {
+        const feature = trimLine.split(" ")[2];
+        stack.push(features[feature]); // Push true/false
+        continue; // Don't include the marker line
+      }
 
-  if (!answers.mongo) {
-    appJsContent = appJsContent.replace(/import connectDB.*\n/, "");
-    appJsContent = appJsContent.replace(/connectDB\(\);\n/, "");
-  }
+      // Check for ENDIF marker
+      if (trimLine.startsWith("// #ENDIF")) {
+        stack.pop();
+        continue; // Don't include the marker line
+      }
 
-  fs.writeFileSync(appJsPath, appJsContent);
+      // If any value in stack is false, skip the line
+      if (stack.every((val) => val)) {
+        result.push(line);
+      }
+    }
+
+    return result.join("\n");
+  };
+
+  const processedContent = processTemplate(appJsContent, features);
+  fs.writeFileSync(appJsPath, processedContent);
 
   if (answers.dotenv) {
     fs.writeFileSync(
@@ -160,12 +178,12 @@ JWT_SECRET=supersecretkey
   }
 }
 
-/* -------------------- FRONTEND SETUP -------------------- */
+//  FRONTEND SETUP  
 if (answers.frontend) {
   fs.copySync(frontendTemplatePath, path.join(root, "frontend"));
 }
 
-/* -------------------- TAILWIND SETUP -------------------- */
+//  TAILWIND SETUP  
 if (answers.frontend && answers.tailwind) {
   const frontendDir = path.join(root, "frontend");
 
@@ -216,7 +234,7 @@ module.exports = {
 
 spinner.succeed("Project structure created");
 
-/* -------------------- DEP MANAGEMENT -------------------- */
+//  DEP MANAGEMENT 
 const updatePackageJson = (dir, deps = {}, devDeps = {}, removeDeps = []) => {
   const pkgPath = path.join(dir, "package.json");
   const pkg = fs.readJsonSync(pkgPath);
@@ -239,11 +257,11 @@ const updatePackageJson = (dir, deps = {}, devDeps = {}, removeDeps = []) => {
 };
 
 const installDeps = (dir) => {
-  console.log(chalk.cyan(`\n📦 Installing dependencies in ${path.basename(dir)}...`));
+  console.log(chalk.cyan(`\n Installing dependencies in ${path.basename(dir)}...`));
   execSync("npm install", { cwd: dir, stdio: "inherit" });
 };
 
-/* -------------------- BACKEND DEPS -------------------- */
+//  BACKEND DEPS 
 if (answers.backend) {
   const removeDeps = [];
   if (!answers.mongo) removeDeps.push("mongoose");
@@ -258,7 +276,7 @@ if (answers.backend) {
   installDeps(path.join(root, "backend"));
 }
 
-/* -------------------- FRONTEND DEPS -------------------- */
+// FRONTEND DEPS 
 if (answers.frontend) {
   const deps = {};
   const devDeps = {};
@@ -290,8 +308,8 @@ if (answers.frontend) {
   installDeps(path.join(root, "frontend"));
 }
 
-/* -------------------- DONE -------------------- */
-console.log(chalk.green.bold("\n✅ Project Setup Complete!\n"));
+// DONE 
+console.log(chalk.green.bold("\n Project Setup Complete!\n"));
 console.log(chalk.yellow("Next steps:"));
 console.log(`  cd ${answers.projectName}`);
 answers.backend && console.log("  cd backend && npm run dev");
