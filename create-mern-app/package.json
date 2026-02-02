@@ -1,0 +1,28 @@
+{
+  "name": "create-mern-app",
+  "version": "1.0.0",
+  "description": "A CLI to scaffold production-ready MERN stack projects",
+  "bin": {
+    "create-mern-app": "bin/index.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mern",
+    "cli",
+    "scaffold",
+    "react",
+    "express",
+    "mongodb"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "dependencies": {
+    "chalk": "^5.6.2",
+    "fs-extra": "^11.3.3",
+    "inquirer": "^13.2.2",
+    "ora": "^9.1.0"
+  }
+}
